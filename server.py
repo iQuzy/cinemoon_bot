@@ -13,16 +13,16 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 hl.add('/', {
-    'Поиск фильмов': bfunc.home_find,
+    '^(Поиск фильмов|/search_films)$': bfunc.home_find,
     '.*': bfunc.home_default,
 })
 
-hl.add('/films_search', {
-    '.*': bfunc.films_search
+hl.add('/search_films', {
+    '.*': bfunc.search_films
 })
 
 hl.add('special', {
-    'Назад': bfunc.specil_home
+    '^(💃 Назад|/back)$': bfunc.specil_home
 })
 
 

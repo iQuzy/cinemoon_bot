@@ -7,15 +7,15 @@ import botkb
 
 
 async def home_find(m: Message):
-    hl.set_user_path('/films_search', m.from_user.id)
-    await m.answer('Введите название фильма')
+    hl.set_user_path('/search_films', m.from_user.id)
+    await m.answer('Введите название фильма', reply_markup=botkb.static_back_home)
 
 
 async def home_default(m: Message):
-    await m.answer('Напишите "Поиск фильмов"')
+    await m.answer('Используйте команту \n/search_films для посика фильмов')
 
 
-async def films_search(m: Message):
+async def search_films(m: Message):
     title = m.text
     await m.answer(f'Идёт поиск фильма "{title}"')
 
@@ -31,7 +31,7 @@ async def films_search(m: Message):
     sort = sort_index_compare(films, title)
 
     k = 0
-    k_max = 50
+    k_max = 25
     film_kp_ids = {}
 
     for sort_films_index in sort:
@@ -54,4 +54,4 @@ async def films_search(m: Message):
 
 async def specil_home(m: Message):
     hl.set_user_path('/', m.from_user.id)
-    await m.answer('Вы вернулись домой')
+    await m.answer('Вы вернулись домой 💃')
