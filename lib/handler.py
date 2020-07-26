@@ -15,6 +15,8 @@ class Handler:
         self._handlers_array = {}
         self._handlers_array['special'] = []
 
+        self.query_handler_array = []
+
     def _base_init(self):
         self._cursor.execute(
             """CREATE TABLE IF NOT EXISTS "users" ("tg_id" INTEGER NOT NULL UNIQUE, "path" TEXT NOT NULL DEFAULT '/', PRIMARY KEY("tg_id"));""")
@@ -36,7 +38,7 @@ class Handler:
             f"""UPDATE "main"."users" SET path = "{new_path}" WHERE tg_id = {user_id};""")
         self._connect.commit()
 
-    #обработчик входящих сообщений
+    # обработчик входящих сообщений
     async def handle_message(self, m: types.Message) -> None:
         user_path = self.get_user_path(m.from_user.id)
 
@@ -46,7 +48,7 @@ class Handler:
                 if re.match(handler[0], _message):
                     return handler[1]
             return None
-        
+
         func = search_handler(m.text, self._handlers_array['special'])
         if func:
             await func(m)
@@ -59,10 +61,16 @@ class Handler:
                 await func(m)
                 return
 
+    async def handle_query(self, c: types.CallbackQuery) -> None:
+        for i in self.query_handler_array:
+            await i[1](c) if re.match(i[0], c.data) else 0
+
     def add(self, path: str, templates: dict) -> None:
         if not (self._handlers_array.get(path)):
             self._handlers_array[path] = []
         self._handlers_array[path].append(list(templates.items()))
 
+    def add_query(self, template: str, func) -> None:
+        self.query_handler_array.append([template, func])
 
-hl = Handler('handler.db')
+hl = Handler('db/handler.db')

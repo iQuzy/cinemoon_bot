@@ -1,8 +1,6 @@
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from lib.handler import hl
 from lib.hdvbDriver import hdvb
-from lib.sortfilms import sort_index_compare
-from lib.yaspeller import speller_check
 import botkb
 
 
@@ -16,42 +14,27 @@ async def home_default(m: Message):
 
 
 async def search_films(m: Message):
-    title = m.text
-    await m.answer(f'Идёт поиск фильма "{title}"')
+    await m.answer(f'Идёт поиск фильма "{m.text}"')
 
-    films = hdvb.find_by_title(title)
-    if not films:
-        sp_check = speller_check(title)
-        if sp_check:
-            for i in sp_check:
-                title = title.replace(i['uncorrect'], i['correct'])
-            await m.answer(f'Возможно вы имели в виду "{title}"?')
-            films = hdvb.find_by_title(title)
+    films = await hdvb.find_by_title(m.text, limit=25)
 
-    sort = sort_index_compare(films, title)
-
-    k = 0
-    k_max = 25
-    film_kp_ids = {}
-
-    for sort_films_index in sort:
-        for film_index in sort_films_index:
-            if k >= k_max:
-                return
-            if film_kp_ids.get(films[film_index]['kinopoisk_id']):
-                continue
-
-            f = films[film_index]
-            film_kp_ids[f['kinopoisk_id']] = True
-            caption = f"🎬 {f['title_ru']} ({str(f['year']) + '/' if f['year'] else ''}{f['quality']})"
-
-            await m.answer_photo(f['poster'], caption=caption, reply_markup=botkb.search_film(f['iframe_url'], f['kinopoisk_id']))
-            k += 1
-
-    if k == 0:
+    if films:
+        for film in films:
+            caption = "🎬{title} ({year}{quality})".format(
+                title=film.title,
+                year=str(film.year) + '/' if film.year else '',
+                quality=film.quality
+            )
+            await m.answer_photo(film.poster, caption=caption, reply_markup=botkb.search_film(film.iframe_url, film.kinopoisk_id))
+    else:
         await m.answer("Простите, я ничего не нашел")
-
+    del films
 
 async def specil_home(m: Message):
     hl.set_user_path('/', m.from_user.id)
     await m.answer('Вы вернулись домой 💃')
+
+# async def query_film_info(c: CallbackQuery):
+#     await c.answer('Получение информации о фильме..')
+#     kinopoisk_id =  re.search('\d+', c.data).group(0)
+#     hdvb.get_film_info(kinopoisk_id)

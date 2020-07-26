@@ -25,12 +25,18 @@ hl.add('special', {
     '^(💃 Назад|/back)$': bfunc.specil_home
 })
 
+# hl.add_query('^(film_info_.*)$', bfunc.query_film_info)
+
 
 @dp.message_handler()
 async def handler(m: types.Message):
     logging.info(f'[Message] From: {m.from_user.full_name} | Text: {m.text}')
     await hl.handle_message(m)
 
+@dp.callback_query_handler()
+async def handler(c: types.CallbackQuery):
+    await hl.handle_query(c)
+    # await bot.edit_message_caption(c.from_user.id, c.message.message_id, caption="edit")
 
 def start():
     try:
