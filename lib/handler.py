@@ -1,13 +1,12 @@
 import sqlite3
 import re
 from aiogram import types
-
+import typing
 
 class Handler:
 
     def __init__(self, dbpath: str):
-        self._dbpath = dbpath
-        self._connect = sqlite3.connect(self._dbpath)
+        self._connect = sqlite3.connect(dbpath)
         self._cursor = self._connect.cursor()
 
         self._base_init()
@@ -19,29 +18,33 @@ class Handler:
 
     def _base_init(self):
         self._cursor.execute(
-            """CREATE TABLE IF NOT EXISTS "users" ("tg_id" INTEGER NOT NULL UNIQUE, "path" TEXT NOT NULL DEFAULT '/', PRIMARY KEY("tg_id"));""")
+            'CREATE TABLE IF NOT EXISTS "users" ("tg_id" INTEGER NOT NULL UNIQUE, "path" TEXT NOT NULL DEFAULT "/", PRIMARY KEY("tg_id"));')
         self._connect.commit()
 
     def get_user_path(self, user_id: int) -> str:
         u = self._cursor.execute(
-            f"""SELECT "path" FROM "main"."users" WHERE tg_id = {user_id};""").fetchone()
+            'SELECT "path" FROM "main"."users" WHERE tg_id = ?;', (user_id,)).fetchone()
         if u:
             return u[0]
         else:
             self._cursor.execute(
-                f"""INSERT INTO "main"."users" ("tg_id") VALUES ({user_id});""")
+                'INSERT INTO "main"."users" ("tg_id") VALUES (?);', (user_id,))
             self._connect.commit()
             return '/'
 
     def set_user_path(self, new_path: str, user_id: int) -> None:
         self._cursor.execute(
-            f"""UPDATE "main"."users" SET path = "{new_path}" WHERE tg_id = {user_id};""")
+            'UPDATE "main"."users" SET path = (?) WHERE tg_id = (?);', (new_path, user_id))
         self._connect.commit()
+
+    def get_all_ids(self) -> typing.List:
+        return self._cursor.execute('SELECT "tg_id" FROM "main"."users"').fetchall()
 
     # обработчик входящих сообщений
     async def handle_message(self, m: types.Message) -> None:
         user_path = self.get_user_path(m.from_user.id)
-
+        m.text = '' if not m.text else m.text
+    
         def search_handler(_message: str, _handlers):
             _handlers = _handlers[0]
             for handler in _handlers:
@@ -72,5 +75,6 @@ class Handler:
 
     def add_query(self, template: str, func) -> None:
         self.query_handler_array.append([template, func])
+
 
 hl = Handler('db/handler.db')

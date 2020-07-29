@@ -1,14 +1,24 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
-def back_home():
+
+def help():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(KeyboardButton("💃 Назад"))
+    kb.add(KeyboardButton("📕 Подсказки"))
     return kb
 
-def search_film(iframe_url: str, kinopoisk_id: int, btn_info=True):
+
+def search_film(iframe_url: str, kinopoisk_id: int, watch_btn=False):
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton('🍿Смотреть фильм', url=f'https://iquzy.github.io/cm?f={iframe_url}'))
-    kb.add(InlineKeyboardButton('📙Подробнее на Кинопоиске', url=f'https://www.kinopoisk.ru/film/{kinopoisk_id}'))
+
+    if watch_btn:
+        kb.add(InlineKeyboardButton('🍿 Смотреть онлайн',
+                                    url=f'https://iquzy.github.io/cm?f={iframe_url}'))
+    else:
+        kb.add(InlineKeyboardButton('🔮 Кнопка для просмотра', callback_data=f'show_watch_btn|{kinopoisk_id}'))
+
+    kb.add(InlineKeyboardButton('📙 Подробнее на КиноПоиск',
+                                url=f'https://www.kinopoisk.ru/film/{kinopoisk_id}'))
     return kb
 
-static_back_home = back_home()
+
+static_help = help()

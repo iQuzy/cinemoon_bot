@@ -1,7 +1,9 @@
-import aiohttp
 import re
-from config import HDVD_TOKEN
+import time
+import sqlite3
+import aiohttp
 from typing import List
+from config import HDVD_TOKEN
 
 
 class YaspellerResponse:
@@ -23,14 +25,20 @@ class Film:
     year: int
     quality: str
     poster: str
+    rating: int
+    ftype: str
+    ftoken: str
 
-    def __init__(self, title: str, iframe_url: str, kinopoisk_id: int, year: int, quality: str, poster: str):
+    def __init__(self, title='', iframe_url='', kinopoisk_id=0, year=0, quality='', poster='', rating=0, ftype='', ftoken=''):
         self.title = title
         self.iframe_url = iframe_url
         self.kinopoisk_id = kinopoisk_id
         self.year = year
         self.quality = quality
         self.poster = poster
+        self.rating = rating
+        self.ftype = ftype
+        self.ftoken = ftoken
 
     def __str__(self):
         return str({
@@ -39,7 +47,10 @@ class Film:
             'kinopoisk_id': self.kinopoisk_id,
             'year': self.year,
             'quality': self.quality,
-            'poster': self.poster
+            'poster': self.poster,
+            'rating': self.rating,
+            'ftype': self.ftype,
+            'ftoken': self.ftoken
         })
 
 
@@ -75,14 +86,25 @@ def _sampling_films(films: list, film_title: str) -> List[List[int]]:
 
 async def _sorted_films(films: List[Film]) -> List[Film]:
     """Сортировка фильмов по году выпуска"""
-    return sorted(films, key=lambda film: film.year, reverse=True)
+    return sorted(films, key=lambda film: film.year)
 
 
 class HDVB:
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, dbpath: str):
         self._token = token
         self._base_url = 'https://apivb.info/api/'
+        self._db = self._database(dbpath)
+
+    async def _fetch(self, method: str, *args, **kwargs) -> dict:
+        kwargs['token'] = self._token
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self._base_url + method, params=kwargs) as resp:
+                try:
+                    return await resp.json()
+                except Exception as e:
+                    print(e)
+                    return []
 
     async def find_by_title(self, title: str, limit: int = 25) -> List[Film]:
         films = []
@@ -114,6 +136,8 @@ class HDVB:
                                 year=resp_json[i]['year'],
                                 quality=resp_json[i]['quality'],
                                 poster=resp_json[i]['poster'],
+                                ftype=resp_json[i]['type'],
+                                ftoken=resp_json[i]['token'],
                             )
                         )
                         kp_ids[resp_json[i]['kinopoisk_id']] = 1
@@ -124,11 +148,116 @@ class HDVB:
 
         return await _sorted_films(films)
 
-    async def _fetch(self, method: str, *args, **kwargs) -> dict:
-        kwargs['token'] = self._token
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self._base_url + method, params=kwargs) as resp:
-                return await resp.json()
+    async def find_by_kp_id(self, kp_id: int) -> Film:
+        resp_json = await self._fetch('videos.json', id_kp=kp_id)
+
+        if type(resp_json) == list:
+            return Film(
+                title=resp_json[0]['title_ru'],
+                iframe_url=resp_json[0]['iframe_url'],
+                kinopoisk_id=resp_json[0]['kinopoisk_id'],
+                year=resp_json[0]['year'],
+                quality=resp_json[0]['quality'],
+                poster=resp_json[0]['poster'],
+                ftype=resp_json[0]['type'],
+                ftoken=resp_json[0]['token'],
+            )
+
+        elif type(resp_json) == dict:
+            print(resp_json)
+
+        return Film()
+
+    async def find_by_ftoken(self, ftype: str, ftoken: str) -> Film:
+        resp_json = await self._fetch(f'{ftype}.json', video_token=ftoken)
+
+        if resp_json:
+            return Film(
+                title=resp_json['title_ru'],
+                iframe_url=resp_json['iframe_url'],
+                kinopoisk_id=resp_json['kinopoisk_id'],
+                year=resp_json['year'],
+                quality=resp_json['quality'],
+                poster=resp_json['poster'],
+                ftype=resp_json['type'],
+                ftoken=resp_json['token'],
+            )
+        return Film()
+
+    async def get_popular_films(self) -> List[Film]:
+        popular_films = await self._db.get_popular_films()
+        films = [0]*len(popular_films)
+
+        i = 0
+        for f in popular_films:
+            films[i] = Film(kinopoisk_id=f[0], rating=f[1],
+                            title=f[2], poster=f[3], year=f[4], quality=f[5])
+            i += 1
+
+        return films
+
+    async def up_film_rating(self, film: Film) -> None:
+        await self._db.up_film_rating(film)
+
+    class _database:
+
+        def __init__(self, dbpath: str):
+            self._connect = sqlite3.connect(dbpath)
+            self._cursor = self._connect.cursor()
+            self._init_db()
+
+        def _init_db(self) -> None:
+            self._cursor.execute(
+                'CREATE TABLE IF NOT EXISTS "films" ' +
+                '("kp_id" INTEGER NOT NULL UNIQUE, ' +
+                '"rating" INTEGER NOT NULL DEFAULT 0, ' +
+                '"title" TEXT NOT NULL DEFAULT "", ' +
+                '"poster" TEXT NOT NULL DEFAULT "", ' +
+                '"yaer" INTEGER NOT NULL DEFAULT 0, ' +
+                '"quality" TEXT NOT NULL DEFAULT "", ' +
+                'PRIMARY KEY("kp_id"));'
+            )
+            self._connect.commit()
+
+        async def get_film(self, kp_id: int) -> Film:
+            r = self._cursor.execute(
+                'SELECT * FROM "main"."films" WHERE kp_id = (?);', (kp_id,)).fetchone()
+            return Film(kinopoisk_id=r[0], rating=r[1], title=r[2], poster=r[3], year=r[4], quality=r[5]) if r else Film()
+
+        async def add_film(self, film: Film) -> None:
+            self._cursor.execute(
+                'INSERT INTO "main"."films" VALUES (?, ?, ?, ?, ?, ?)', (
+                    film.kinopoisk_id,
+                    film.rating,
+                    film.title,
+                    film.poster,
+                    film.year,
+                    film.quality
+                ))
+            self._connect.commit()
+
+        async def up_film_rating(self, film: Film) -> None:
+            dbfilm = await self.get_film(film.kinopoisk_id)
+            r = int(time.time()/60/60)/1000000
+
+            if dbfilm.kinopoisk_id:
+                self._cursor.execute('UPDATE "main"."films" SET rating = ? WHERE kp_id = ?', (
+                    dbfilm.rating + r,
+                    dbfilm.kinopoisk_id
+                ))
+                
+                if dbfilm.quality != film.quality:
+                    self._cursor.execute('UPDATE "main"."films" SET quality = ? WHERE kp_id = ?', (
+                        film.quality,
+                        film.kinopoisk_id
+                    ))
+                self._connect.commit()
+            else:
+                film.rating = r
+                await self.add_film(film)
+
+        async def get_popular_films(self) -> List[int]:
+            return self._cursor.execute('SELECT * FROM "main"."films" ORDER BY rating DESC LIMIT 14').fetchall()
 
 
-hdvb = HDVB(HDVD_TOKEN)
+hdvb = HDVB(HDVD_TOKEN, 'db/hdvb.db')

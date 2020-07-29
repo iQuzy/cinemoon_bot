@@ -13,30 +13,37 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 hl.add('/', {
-    '^(Поиск фильмов|/search_films)$': bfunc.home_find,
-    '.*': bfunc.home_default,
+    '^(.+)$': bfunc.search_films,
 })
 
-hl.add('/search_films', {
-    '.*': bfunc.search_films
+hl.add('/mailing', {
+    '^(.*|.+)$': bfunc.mailing_text
+})
+
+hl.add('/mailing_verify', {
+    '^(Старт)$': bfunc.mailing_start,
+    '^(Отмена)$': bfunc.mailing_cancel,
 })
 
 hl.add('special', {
-    '^(💃 Назад|/back)$': bfunc.specil_home
+    '^(/start)$': bfunc.special_start,
+    '^(📕 Подсказки|/help)$': bfunc.special_help,
+    '^(/popular)$': bfunc.popular_films,
+    '^(/mailing)$': bfunc.special_mailing
 })
 
-# hl.add_query('^(film_info_.*)$', bfunc.query_film_info)
+hl.add_query('^(show_watch_btn|.+)$', bfunc.query_show_watch_btn)
 
 
-@dp.message_handler()
+@dp.message_handler(content_types=types.ContentType.ANY)
 async def handler(m: types.Message):
-    logging.info(f'[Message] From: {m.from_user.full_name} | Text: {m.text}')
+    logging.info(f'[Message] From: {m.from_user.full_name}(@{m.from_user.username}) | Text: {m.text}')
     await hl.handle_message(m)
+
 
 @dp.callback_query_handler()
 async def handler(c: types.CallbackQuery):
     await hl.handle_query(c)
-    # await bot.edit_message_caption(c.from_user.id, c.message.message_id, caption="edit")
 
 def start():
     try:
