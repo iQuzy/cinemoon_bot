@@ -77,4 +77,4 @@ class Handler:
         self.query_handler_array.append([template, func])
 
 
-hl = Handler('db/handler.db')
+

@@ -3,7 +3,6 @@ import time
 import sqlite3
 import aiohttp
 from typing import List
-from config import HDVD_TOKEN
 
 
 class YaspellerResponse:
@@ -260,4 +259,3 @@ class HDVB:
             return self._cursor.execute('SELECT * FROM "main"."films" ORDER BY rating DESC LIMIT 14').fetchall()
 
 
-hdvb = HDVB(HDVD_TOKEN, 'db/hdvb.db')

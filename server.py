@@ -1,15 +1,11 @@
 import logging
 import time
-from aiogram import Bot, Dispatcher, executor, types
-
-from lib.handler import hl
-from config import BOT_TOKEN
+from aiogram import Dispatcher, executor, types
+from app import hl, bot
 import bfunc
 
 
 logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 hl.add('/', {
@@ -28,7 +24,9 @@ hl.add('/mailing_verify', {
 hl.add('special', {
     '^(/start)$': bfunc.special_start,
     '^(📕 Подсказки|/help)$': bfunc.special_help,
-    '^(/popular)$': bfunc.popular_films,
+    '^(🔎 Поиск фильмов|/search_films)$': bfunc.special_search_films,
+    '^(🎬 Тренды|/popular)$': bfunc.special_popular_films,
+    '^(👻 Контакты|/contacts)$': bfunc.special_contacts,
     '^(/mailing)$': bfunc.special_mailing
 })
 
@@ -37,13 +35,15 @@ hl.add_query('^(show_watch_btn|.+)$', bfunc.query_show_watch_btn)
 
 @dp.message_handler(content_types=types.ContentType.ANY)
 async def handler(m: types.Message):
-    logging.info(f'[Message] From: {m.from_user.full_name}(@{m.from_user.username}) | Text: {m.text}')
+    logging.info(
+        f'[Message] From: {m.from_user.full_name}(@{m.from_user.username}) | Text: {m.text}')
     await hl.handle_message(m)
 
 
 @dp.callback_query_handler()
 async def handler(c: types.CallbackQuery):
     await hl.handle_query(c)
+
 
 def start():
     try:

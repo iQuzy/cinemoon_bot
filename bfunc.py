@@ -1,7 +1,6 @@
 from aiogram.types import Message, CallbackQuery
-from lib.handler import hl
-from lib.hdvbDriver import hdvb
-import botkb
+from app import hl, hdvb
+import templates
 import config
 
 
@@ -31,23 +30,16 @@ async def search_films(m: Message):
                 year=str(film.year) + '/' if film.year else '',
                 quality=film.quality
             )
-            await m.answer_photo(film.poster, caption=caption, reply_markup=botkb.search_film(film.iframe_url, film.kinopoisk_id))
-    else:
-        await m.answer('Простите, я ничего не нашел', reply_markup=botkb.static_help)
-
-
-async def popular_films(m: Message):
-    films = await hdvb.get_popular_films()
-    if films:
-        for film in films:
-            caption = "🎬{title} ({year}{quality})".format(
-                title=film.title,
-                year=str(film.year) + '/' if film.year else '',
-                quality=film.quality
+            await m.answer_photo(
+                photo=film.poster,
+                caption=caption,
+                reply_markup=templates.btn_search_film(
+                    film.iframe_url,
+                    film.kinopoisk_id
+                )
             )
-            await m.answer_photo(film.poster, caption=caption, reply_markup=botkb.search_film(film.iframe_url, film.kinopoisk_id))
     else:
-        await m.answer('Рейтинг пуст')
+        await m.answer('Простите, я ничего не нашел', reply_markup=templates.STATIC_BTN_HELP)
 
 
 async def mailing_text(m: Message):
@@ -96,37 +88,49 @@ async def mailing_cancel(m: Message):
     await m.answer('Рассылка отменена')
 
 
+async def special_search_films(m: Message):
+    await m.answer(templates.STATIC_TEXT_SPECIAL_SEARCH_FILMS)
+
+
+async def special_popular_films(m: Message):
+    await m.answer(templates.STATIC_TEXT_SPECIAL_TRENDS)
+
+    films = await hdvb.get_popular_films()
+    if films:
+        n = 1
+        for film in films:
+            caption = "{n}. 🎬{title} ({year}{quality})".format(
+                n=n,
+                title=film.title,
+                year=str(film.year) + '/' if film.year else '',
+                quality=film.quality
+            )
+            await m.answer_photo(
+                photo=film.poster,
+                caption=caption,
+                reply_markup=templates.btn_search_film(
+                    film.iframe_url,
+                    film.kinopoisk_id
+                )
+            )
+            n += 1
+    else:
+        await m.answer('Рейтинг пуст')
+
+
+async def special_contacts(m: Message):
+    await m.answer(templates.STATIC_TEXT_SPECIAL_CONTACTS)
+
+
 async def special_help(m: Message):
-    text = """
-🔎 Для поиска отправьте название фильма или сериала
-
-📌 Также вы можете использовать следующие команды:
-/popular - Популярные фильмы
-/help - Подсказки
-
-📝 Контакты:
-@iquzy - тех. поддержка, реклама 
-"""
-
-    text_for_admin = """
-👷🏻‍♂️ Вы являетесь админом бота. Для вас есть следующие команды:
-/mailing - Рассылка сообщений пользователям    
-"""
-    await m.answer(text)
+    await m.answer(templates.STATIC_TEXT_SPECIAL_HELP, reply_markup=templates.STATIC_BTN_HELP)
 
     if m.from_user.id == config.ADMIN_ID:
-        await m.answer(text_for_admin)
+        await m.answer(templates.STATIC_TEXT_SPECIAL_HELP_ADMIN)
 
 
 async def special_start(m: Message):
-    text = """
-Хеллоу, я Cinemoon 👻🤖
-
-🔎 В моей библиотеке ты найдешь множество фильмов, сериалов и новинок киноиндустрии!
-
-📌 Используй команду /help или нажми на кнопку "📕 Подсказки", чтобы узнать, как правильно пользоваться мной
-"""
-    await m.answer(text, reply_markup=botkb.static_help)
+    await m.answer(templates.STATIC_TEXT_SPECIAL_START, reply_markup=templates.STATIC_BTN_HELP)
 
 
 async def special_mailing(m: Message):
@@ -140,8 +144,15 @@ async def query_show_watch_btn(c: CallbackQuery):
     film = await hdvb.find_by_kp_id(kp_id)
 
     if film.kinopoisk_id:
-        await c.bot.edit_message_reply_markup(c.from_user.id, c.message.message_id,
-                                              reply_markup=botkb.search_film(film.iframe_url, film.kinopoisk_id, True))
+        await c.bot.edit_message_reply_markup(
+            chat_id=c.from_user.id,
+            message_id=c.message.message_id,
+            reply_markup=templates.btn_search_film(
+                film.iframe_url,
+                film.kinopoisk_id,
+                True
+            )
+        )
         await hdvb.up_film_rating(film)
     else:
         c.answer('Ошибка')
