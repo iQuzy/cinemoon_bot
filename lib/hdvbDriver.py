@@ -53,6 +53,38 @@ class Film:
         })
 
 
+class KPResponse:
+
+    filmID: int
+    title: str
+    year: str
+    length: str
+    description: str
+    genres: list
+
+    def __init__(self, obj: dict = {}):
+        if obj:
+            d = obj['data']
+            self._obj = obj
+            self.filmID = d['filmId']
+            self.title = d['nameRu']
+            self.year = d['year']
+            self.length = d['filmLength']
+            self.description = d['description']
+            self.genres = [list(g.items())[0][1] for g in d['genres']]
+            del d, obj
+        else:
+            self.filmID = 0
+            self.title = ''
+            self.year = ''
+            self.length = ''
+            self.description = ''
+            self.genres = []
+
+    def __str__(self):
+        return str(self._obj)
+
+
 async def _yaspeller(title: str) -> List[YaspellerResponse]:
     u, p = 'https://speller.yandex.net/services/spellservice.json/checkText', {
         'lang': 'ru', 'text': title}
@@ -62,7 +94,7 @@ async def _yaspeller(title: str) -> List[YaspellerResponse]:
             return [YaspellerResponse(uncorrect=i['word'], correct=i['s'][0]) for i in resp_json]
 
 
-def _sampling_films(films: list, film_title: str) -> List[List[int]]:
+async def _sampling_films(films: list, film_title: str) -> List[List[int]]:
     """находит наибольшее кол-во совпадение в название фильма"""
     fts = re.split('\s|-|:|\.', film_title.lower().replace('ё', 'е'))
     len_fts, len_films = len(fts), len(films)
@@ -90,33 +122,47 @@ async def _sorted_films(films: List[Film]) -> List[Film]:
 
 class HDVB:
 
-    def __init__(self, token: str, dbpath: str):
-        self._token = token
-        self._base_url = 'https://apivb.info/api/'
-        self._db = self._database(dbpath)
+    def __init__(self, hdvb_token: str, kp_token: str, dbpath: str):
+        self._hdvb_token = hdvb_token
+        self._kp_token = kp_token
+        self._base_hdvb_url = 'https://apivb.info/api/'
+        self._base_kp_films_url = 'https://kinopoiskapiunofficial.tech/api/v2.1/films/'
+        self._db = self._Database(dbpath)
 
-    async def _fetch(self, method: str, *args, **kwargs) -> dict:
-        kwargs['token'] = self._token
+    async def _fetch_hdvb(self, method: str, *args, **kwargs) -> dict:
+        kwargs['token'] = self._hdvb_token
         async with aiohttp.ClientSession() as session:
-            async with session.get(self._base_url + method, params=kwargs) as resp:
+            async with session.get(self._base_hdvb_url + method, params=kwargs) as resp:
                 try:
                     return await resp.json()
                 except Exception as e:
                     print(e)
                     return []
 
+    async def _fetch_kp_films(self, method: str, kp_id: int) -> dict:
+        async with aiohttp.ClientSession(headers={'X-API-KEY': self._kp_token}) as session:
+            async with session.get(f'{self._base_kp_films_url}{kp_id}/{method}') as resp:
+                try:
+                    resp_json = await resp.json()
+                    if not resp_json.get('data'):
+                        raise Exception(resp_json)
+                    return resp_json
+                except Exception as e:
+                    print(e)
+                    return {}
+
     async def find_by_title(self, title: str, limit: int = 25) -> List[Film]:
         films = []
-        resp_json = await self._fetch('videos.json', title=title)
+        resp_json = await self._fetch_hdvb('videos.json', title=title)
 
         if type(resp_json) == list and not resp_json:
             speller_check = await _yaspeller(title)
             for word in speller_check:
                 title = title.replace(word.uncorrect, word.correct)
-            resp_json = await self._fetch('videos.json', title=title)
+            resp_json = await self._fetch_hdvb('videos.json', title=title)
 
         if type(resp_json) == list and resp_json:
-            sort_films_index = _sampling_films(resp_json, title)
+            sort_films_index = await _sampling_films(resp_json, title)
 
             k = 0
             kp_ids = {}
@@ -148,7 +194,7 @@ class HDVB:
         return await _sorted_films(films)
 
     async def find_by_kp_id(self, kp_id: int) -> Film:
-        resp_json = await self._fetch('videos.json', id_kp=kp_id)
+        resp_json = await self._fetch_hdvb('videos.json', id_kp=kp_id)
 
         if type(resp_json) == list:
             return Film(
@@ -168,7 +214,7 @@ class HDVB:
         return Film()
 
     async def find_by_ftoken(self, ftype: str, ftoken: str) -> Film:
-        resp_json = await self._fetch(f'{ftype}.json', video_token=ftoken)
+        resp_json = await self._fetch_hdvb(f'{ftype}.json', video_token=ftoken)
 
         if resp_json:
             return Film(
@@ -182,6 +228,12 @@ class HDVB:
                 ftoken=resp_json['token'],
             )
         return Film()
+
+    async def get_film_info(self, kp_id: int) -> KPResponse:
+        resp_json = await self._fetch_kp_films('', kp_id)
+        if resp_json:
+            return KPResponse(resp_json)
+        return KPResponse()
 
     async def get_popular_films(self) -> List[Film]:
         popular_films = await self._db.get_popular_films()
@@ -198,7 +250,7 @@ class HDVB:
     async def up_film_rating(self, film: Film) -> None:
         await self._db.up_film_rating(film)
 
-    class _database:
+    class _Database:
 
         def __init__(self, dbpath: str):
             self._connect = sqlite3.connect(dbpath)
@@ -244,7 +296,7 @@ class HDVB:
                     dbfilm.rating + r,
                     dbfilm.kinopoisk_id
                 ))
-                
+
                 if dbfilm.quality != film.quality:
                     self._cursor.execute('UPDATE "main"."films" SET quality = ? WHERE kp_id = ?', (
                         film.quality,
@@ -256,6 +308,4 @@ class HDVB:
                 await self.add_film(film)
 
         async def get_popular_films(self) -> List[int]:
-            return self._cursor.execute('SELECT * FROM "main"."films" ORDER BY rating DESC LIMIT 14').fetchall()
-
-
+            return self._cursor.execute('SELECT * FROM "main"."films" ORDER BY rating DESC LIMIT 10').fetchall()

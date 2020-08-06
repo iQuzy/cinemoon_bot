@@ -6,4 +6,4 @@ import config
 
 bot = Bot(token=config.BOT_TOKEN)
 hl = Handler('db/handler.db')
-hdvb = HDVB(config.HDVD_TOKEN, 'db/hdvb.db')
+hdvb = HDVB(hdvb_token=config.HDVD_TOKEN, kp_token=config.KP_TOKEN, dbpath='db/hdvb.db')

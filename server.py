@@ -27,10 +27,12 @@ hl.add('special', {
     '^(🔎 Поиск фильмов|/search_films)$': bfunc.special_search_films,
     '^(🎬 Тренды|/popular)$': bfunc.special_popular_films,
     '^(👻 Контакты|/contacts)$': bfunc.special_contacts,
+    '^(📊 Статистика|/statistics)$': bfunc.special_statistics,
     '^(/mailing)$': bfunc.special_mailing
 })
 
-hl.add_query('^(show_watch_btn|.+)$', bfunc.query_show_watch_btn)
+hl.add_query('^(show_watch_btn\|.+)$', bfunc.query_show_watch_btn)
+hl.add_query('^(film_info\|.+)$', bfunc.query_film_info)
 
 
 @dp.message_handler(content_types=types.ContentType.ANY)
@@ -47,7 +49,7 @@ async def handler(c: types.CallbackQuery):
 
 def start():
     try:
-        executor.start_polling(dp, skip_updates=True)
+        executor.start_polling(dp)
     except:
         time.sleep(15)
         start()
