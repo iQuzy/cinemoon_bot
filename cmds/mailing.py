@@ -1,4 +1,5 @@
 from aiogram.types import Message
+from aiogram.utils.exceptions import BotBlocked 
 from app import hl
 import templates
 import config
@@ -39,11 +40,14 @@ async def start_mailing(m: Message):
     m.set_action_path('/')
 
     for user_id in all_user_ids:
-        if mailing_data.text:
-            await m.bot.send_message(user_id, mailing_data.text)
+        try:
+            if mailing_data.text:
+                await m.bot.send_message(user_id, mailing_data.text)
 
-        elif mailing_data.photo_id:
-            await m.bot.send_photo(user_id, photo=mailing_data.photo_id, caption=mailing_data.caption)
+            elif mailing_data.photo_id:
+                await m.bot.send_photo(user_id, photo=mailing_data.photo_id, caption=mailing_data.caption)
+        except BotBlocked:
+            pass
 
     await m.answer(f'📩 Рассылка закончена. Кол-во отправленных сообщений: {len(all_user_ids)}')
     mailing_data = MailingData()
