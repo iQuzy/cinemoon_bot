@@ -1,4 +1,6 @@
 __pycache__/
-lib/__pycache__/
+lib/v2/__pycache__/
+cmds/__pycache__/
+db/__pycache__
 db/*.db
 product.txt

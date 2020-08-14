@@ -1,6 +1,6 @@
 import re
 import time
-import sqlite3
+from db.mydb import Database
 import aiohttp
 from typing import List
 
@@ -122,12 +122,12 @@ async def _sorted_films(films: List[Film]) -> List[Film]:
 
 class HDVB:
 
-    def __init__(self, hdvb_token: str, kp_token: str, dbpath: str):
+    def __init__(self, hdvb_token: str, kp_token: str, db: Database):
         self._hdvb_token = hdvb_token
         self._kp_token = kp_token
         self._base_hdvb_url = 'https://apivb.info/api/'
         self._base_kp_films_url = 'https://kinopoiskapiunofficial.tech/api/v2.1/films/'
-        self._db = self._Database(dbpath)
+        self._db = self.DataBrowser(db)
 
     async def _fetch_hdvb(self, method: str, *args, **kwargs) -> dict:
         kwargs['token'] = self._hdvb_token
@@ -242,7 +242,7 @@ class HDVB:
         i = 0
         for f in popular_films:
             films[i] = Film(kinopoisk_id=f[0], rating=f[1],
-                            title=f[2], poster=f[3], year=f[4], quality=f[5])
+                            title=f[2], poster=f[3], year=f[4], quality=f[5], ftoken=f[6])
             i += 1
 
         return films
@@ -250,62 +250,68 @@ class HDVB:
     async def up_film_rating(self, film: Film) -> None:
         await self._db.up_film_rating(film)
 
-    class _Database:
+    class DataBrowser:
 
-        def __init__(self, dbpath: str):
-            self._connect = sqlite3.connect(dbpath)
-            self._cursor = self._connect.cursor()
-            self._init_db()
+        def __init__(self, db: Database):
+            self._connect = db.connect
+            self._cursor = db.cursor
 
-        def _init_db(self) -> None:
+            # init table
+            self._init_table_movies()
+            self._connect.commit()
+
+        def _init_table_movies(self):
             self._cursor.execute(
-                'CREATE TABLE IF NOT EXISTS "films" ' +
-                '("kp_id" INTEGER NOT NULL UNIQUE, ' +
-                '"rating" INTEGER NOT NULL DEFAULT 0, ' +
-                '"title" TEXT NOT NULL DEFAULT "", ' +
-                '"poster" TEXT NOT NULL DEFAULT "", ' +
-                '"yaer" INTEGER NOT NULL DEFAULT 0, ' +
-                '"quality" TEXT NOT NULL DEFAULT "", ' +
-                'PRIMARY KEY("kp_id"));'
+                'CREATE TABLE IF NOT EXISTS "movies" ('
+                + '"kinopoisk_id"	INTEGER NOT NULL UNIQUE,'
+                + '"rating"	INTEGER NOT NULL DEFAULT 0,'
+                + '"title"	TEXT NOT NULL DEFAULT "",'
+                + '"poster_url"	TEXT NOT NULL DEFAULT "",'
+                + '"year"	INTEGER NOT NULL DEFAULT 0,'
+                + '"quality"	TEXT NOT NULL DEFAULT "",'
+                + '"token"	TEXT NOT NULL DEFAULT "",'
+                + 'PRIMARY KEY("kinopoisk_id"))'
             )
+
+        async def add_film(self, film: Film) -> None:
+            self._cursor.execute('INSERT INTO "main"."movies" VALUES (?, ?, ?, ?, ?, ?, ?)', (
+                film.kinopoisk_id,
+                film.rating,
+                film.title,
+                film.poster,
+                film.year,
+                film.quality,
+                film.ftoken,
+            ))
             self._connect.commit()
 
         async def get_film(self, kp_id: int) -> Film:
             r = self._cursor.execute(
-                'SELECT * FROM "main"."films" WHERE kp_id = (?);', (kp_id,)).fetchone()
-            return Film(kinopoisk_id=r[0], rating=r[1], title=r[2], poster=r[3], year=r[4], quality=r[5]) if r else Film()
-
-        async def add_film(self, film: Film) -> None:
-            self._cursor.execute(
-                'INSERT INTO "main"."films" VALUES (?, ?, ?, ?, ?, ?)', (
-                    film.kinopoisk_id,
-                    film.rating,
-                    film.title,
-                    film.poster,
-                    film.year,
-                    film.quality
-                ))
-            self._connect.commit()
+                'SELECT * FROM "main"."movies" WHERE kinopoisk_id = (?)', (kp_id,)).fetchone()
+            return Film(kinopoisk_id=r[0], rating=r[1], title=r[2], poster=r[3], year=r[4], quality=r[5], ftoken=r[6]) if r else Film()
 
         async def up_film_rating(self, film: Film) -> None:
             dbfilm = await self.get_film(film.kinopoisk_id)
             r = int(time.time()/60/60)/1000000
 
             if dbfilm.kinopoisk_id:
-                self._cursor.execute('UPDATE "main"."films" SET rating = ? WHERE kp_id = ?', (
+                self._cursor.execute('UPDATE "main"."movies" SET rating = (?) WHERE kinopoisk_id = (?)', (
                     dbfilm.rating + r,
                     dbfilm.kinopoisk_id
                 ))
 
-                if dbfilm.quality != film.quality:
-                    self._cursor.execute('UPDATE "main"."films" SET quality = ? WHERE kp_id = ?', (
+                if dbfilm.ftoken != film.ftoken:
+                    self._cursor.execute('UPDATE "main"."movies" SET quality = (?) WHERE kinopoisk_id = (?)', (
                         film.quality,
                         film.kinopoisk_id
                     ))
+
                 self._connect.commit()
             else:
                 film.rating = r
                 await self.add_film(film)
 
-        async def get_popular_films(self) -> List[int]:
-            return self._cursor.execute('SELECT * FROM "main"."films" ORDER BY rating DESC LIMIT 10').fetchall()
+        async def get_popular_films(self) -> List[list]:
+            return self._cursor.execute('SELECT * FROM "main"."movies" ORDER BY rating DESC LIMIT 7').fetchall()
+
+ 

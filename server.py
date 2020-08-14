@@ -1,38 +1,38 @@
-import logging
-import time
+from app import hl, bot, hdvb
 from aiogram import Dispatcher, executor, types
-from app import hl, bot
-import bfunc
-
+import logging
+import cmds
 
 logging.basicConfig(level=logging.INFO)
 dp = Dispatcher(bot)
 
 hl.add('/', {
-    '^(.+)$': bfunc.search_films,
+    '^(.+)$': cmds.films.search_films,
 })
 
 hl.add('/mailing', {
-    '^(.*|.+)$': bfunc.mailing_text
+    '^(.*|.+)$': cmds.mailing.set_data
 })
 
 hl.add('/mailing_verify', {
-    '^(Старт)$': bfunc.mailing_start,
-    '^(Отмена)$': bfunc.mailing_cancel,
+    '^(Старт)$': cmds.mailing.start_mailing,
+    '^(Отмена)$': cmds.mailing.cancel_mailing
 })
+
 
 hl.add('special', {
-    '^(/start)$': bfunc.special_start,
-    '^(📕 Подсказки|/help)$': bfunc.special_help,
-    '^(🔎 Поиск фильмов|/search_films)$': bfunc.special_search_films,
-    '^(🎬 Тренды|/popular)$': bfunc.special_popular_films,
-    '^(👻 Контакты|/contacts)$': bfunc.special_contacts,
-    '^(📊 Статистика|/statistics)$': bfunc.special_statistics,
-    '^(/mailing)$': bfunc.special_mailing
+    '^(/start)$': cmds.special.start,
+    '^(📕 Подсказки|/help)$': cmds.special.help_menu,
+    '^(🔎 Поиск фильмов|/search)$': cmds.special.search_films,
+    '^(🎬 Тренды|/trends)$': cmds.special.popular_films,
+    '^(🔥 Подборки|/selection)$': cmds.special.selection,
+    '^(👻 Контакты|/contacts)$': cmds.special.contacts,
+    '^(/analytics)$': cmds.special.analytics,
+    '^(/mailing)$': cmds.special.mailing,
 })
 
-hl.add_query('^(show_watch_btn\|.+)$', bfunc.query_show_watch_btn)
-hl.add_query('^(film_info\|.+)$', bfunc.query_film_info)
+hl.add_query('^(show_watch_btn\|.+)$', cmds.query.show_watch_btn)
+hl.add_query('^(film_info\|.+)$', cmds.query.film_info)
 
 
 @dp.message_handler(content_types=types.ContentType.ANY)
@@ -48,9 +48,12 @@ async def handler(c: types.CallbackQuery):
 
 
 def start():
+    import time
+
     try:
         executor.start_polling(dp)
-    except:
+    except Exception as e:
+        print(e)
         time.sleep(15)
         start()
 
