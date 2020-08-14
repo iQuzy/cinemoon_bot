@@ -3,4 +3,5 @@ lib/v2/__pycache__/
 cmds/__pycache__/
 db/__pycache__
 db/*.db
+db/*.sqlite
 product.txt
