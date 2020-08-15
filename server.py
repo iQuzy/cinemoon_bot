@@ -7,11 +7,11 @@ logging.basicConfig(level=logging.INFO)
 dp = Dispatcher(bot)
 
 hl.add('/', {
-    '^(.+)$': cmds.films.search_films,
+    '^([^\.,\-,\:].+)$': cmds.films.search_films,
 })
 
 hl.add('/mailing', {
-    '^(.*|.+)$': cmds.mailing.set_data
+    '(?s).*': cmds.mailing.set_data
 })
 
 hl.add('/mailing_verify', {
